@@ -679,7 +679,14 @@ DECISION_COMMIT_MARKERS: tuple[str, ...] = (
 
 
 def git_log(root: str | Path, *, limit: int = 200, runner=None) -> list[dict[str, Any]]:
-    """Read the git history. Returns ``[]`` when git or a repository is unavailable.
+    """Read the git history *of this material*. Returns ``[]`` when git or a repository is unavailable.
+
+    Two subtleties, both of which produced wrong provenance before they were handled:
+
+    * when the imported directory is a *subdirectory* of a larger repository (very common: a study
+      living inside a monorepo), the history must be restricted to the paths under it — otherwise the
+      import claims the whole repository's commits as the project's research history;
+    * when the imported directory is outside any repository, there is simply no history to report.
 
     ``runner`` is injectable so history extraction is testable without a real repository.
     """
@@ -690,10 +697,31 @@ def git_log(root: str | Path, *, limit: int = 200, runner=None) -> list[dict[str
 
     if shutil.which("git") is None:
         return []
+
+    def _git(*args: str) -> str:
+        proc = subprocess.run(
+            ["git", *args], cwd=str(root), capture_output=True, text=True, timeout=20, check=False
+        )
+        return proc.stdout.strip() if proc.returncode == 0 else ""
+
+    toplevel = _git("rev-parse", "--show-toplevel")
+    if not toplevel:
+        return []
+
+    pathspec: list[str] = []
+    try:
+        root_resolved = Path(root).resolve()
+        top_resolved = Path(toplevel).resolve()
+        if root_resolved != top_resolved:
+            relative = root_resolved.relative_to(top_resolved).as_posix()
+            pathspec = ["--", relative]
+    except (OSError, ValueError):  # pragma: no cover - defensive
+        pathspec = []
+
     fmt = "%H%x1f%ad%x1f%an%x1f%s%x1e"
     try:
         proc = subprocess.run(
-            ["git", "log", f"--max-count={limit}", f"--pretty=format:{fmt}", "--date=short"],
+            ["git", "log", f"--max-count={limit}", f"--pretty=format:{fmt}", "--date=short", *pathspec],
             cwd=str(root),
             capture_output=True,
             text=True,
