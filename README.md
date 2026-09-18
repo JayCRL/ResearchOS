@@ -58,7 +58,8 @@ researchos skill benchmark --suite LITERATURE --seed-tasks
 researchos skill evolve --from <skill-a>,<skill-b> --rule "every claim needs a locator" --findings findings.json
 ```
 
-`researchos --help` lists every command.
+`researchos --help` lists every command. A step-by-step usage guide (with real output, what each refusal
+means, a command cheat sheet and the Python API) is in [`docs/usage.zh-CN.md`](docs/usage.zh-CN.md) (Chinese).
 
 ---
 

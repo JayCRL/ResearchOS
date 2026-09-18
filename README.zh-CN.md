@@ -56,7 +56,7 @@ researchos skill benchmark --suite LITERATURE --seed-tasks
 researchos skill evolve --from <skill-a>,<skill-b> --rule "每条 claim 必须带定位符" --findings findings.json
 ```
 
-`researchos --help` 会列出全部命令。
+`researchos --help` 会列出全部命令。**详细使用指南（含实测输出、每种"拒绝"的含义、命令速查表、Python API）：[`docs/usage.zh-CN.md`](docs/usage.zh-CN.md)。**
 
 ---
 
