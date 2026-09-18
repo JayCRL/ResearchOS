@@ -1,0 +1,16 @@
+arm,seed,retention_at_1,retention_at_4,loss_final,param_updates,status
+direct,0,0.421,0.381,2.914,10000,ok
+direct,1,0.416,0.372,2.927,10000,ok
+direct,2,0.418,0.377,2.919,10000,ok
+direct,2,0.418,0.377,2.919,10000,ok
+shufwrite,0,0.274,0.201,2.918,10000,ok
+shufwrite,1,0.269,0.196,2.921,10000,ok
+shufwrite,2,0.271,0.199,2.920,10000,ok
+direct,3,,,3.102,4100,failed_oom
+shufwrite,3,,,3.088,3900,failed_oom
+direct_matched_energy,0,0.398,0.349,2.916,12400,ok
+direct_matched_energy,1,0.394,0.344,2.918,12400,ok
+shufwrite_matched_energy,0,0.276,0.203,2.917,12400,ok
+shufwrite_matched_energy,1,0.272,0.200,2.919,12400,ok
+sleep0_direct,0,0.103,0.041,3.551,10000,ok
+sleep0_direct,1,0.098,0.038,3.549,10000,ok

@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# ResearchOS runtime caches (never a source of truth)
+.researchos/cache/
+.researchos/index/*.db
+.researchos/**/*.tmp
+.ros_cache/
+
+# Local scratch
+scratch/
+*.log
+
+# OS
+Thumbs.db
+.DS_Store

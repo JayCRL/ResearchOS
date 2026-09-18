@@ -1,0 +1,11 @@
+arm: direct
+model: gpt2-small
+dataset: wikitext-103
+scale: 124M
+optimizer: adamw
+learning_rate: 0.0003
+steps: 10000
+sleep_steps: 64
+write_position: originating
+matched_energy: false
+seeds: [0, 1, 2]
