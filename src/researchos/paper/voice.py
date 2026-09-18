@@ -51,6 +51,18 @@ REVISION_KINDS: frozenset[TimelineEventKind] = frozenset(
 
 _SENTENCE = re.compile(r"(?<=[.!?])\s+")
 
+#: Decisions the kernel writes automatically when it applies a state transition. They are records of
+#: *bookkeeping* ("Applied transition str_…: …; confidence 0.89"), not research decisions a human made,
+#: and they carry entity ids and import scores that must never reach a paper.
+MACHINE_DECISION_PREFIXES: tuple[str, ...] = ("Applied transition",)
+
+
+def is_machine_decision(decision: object) -> bool:
+    """True for decisions written by the kernel rather than by a researcher."""
+    summary = str(getattr(decision, "summary", ""))
+    made_by = str(getattr(decision, "made_by", ""))
+    return summary.startswith(MACHINE_DECISION_PREFIXES) or made_by in {"kernel", "system"}
+
 
 @dataclass
 class VoiceStep:
@@ -183,6 +195,8 @@ class ResearcherVoice:
                 )
             )
         for decision in self.kernel.decisions.all():
+            if is_machine_decision(decision):
+                continue
             steps.append(
                 VoiceStep(
                     phase="revision",
@@ -353,11 +367,12 @@ class ResearcherVoice:
         return grounded[:limit]
 
 
-def _strip_numerals(text: str) -> str:
-    """Remove numerals from narrative text.
+def neutralise_numerals(text: str) -> str:
+    """Remove numerals from text that is *quoted* rather than computed.
 
-    The narrative is about *process*; every number in the paper must come from an analysis artifact, so
-    the voice layer refuses to carry one rather than forcing the compiler to reject the sentence.
+    The narrative and every quotation of a record (a claim statement, an open question) is about
+    process; every number in the paper must come from an analysis artifact, so this layer refuses to
+    carry one rather than forcing the grounding gate to reject the sentence.
 
     Two shapes are handled separately because they read differently: scale tokens (``124M``, ``1B``,
     ``3k``) are dropped entirely, while genuine measurements (``0.418``) become a placeholder phrase —
@@ -368,6 +383,10 @@ def _strip_numerals(text: str) -> str:
     cleaned = re.sub(r"\bthe\s+the\b", "the", cleaned, flags=re.IGNORECASE)
     cleaned = re.sub(r"\s{2,}", " ", cleaned)
     return cleaned.strip().replace(" ,", ",").replace(" .", ".")
+
+
+#: Backwards-compatible private alias.
+_strip_numerals = neutralise_numerals
 
 
 def voice_context(kernel: ResearchKernel) -> dict[str, object]:

@@ -38,6 +38,7 @@ from ..models.paper import (
 )
 from ..models.timeline import TimelineEventKind
 from .grounding import verify_paper
+from .voice import ResearcherVoice, is_machine_decision, neutralise_numerals
 
 #: Analysis result fields that may be printed, with how they are rendered.
 PRINTABLE_FIELDS: tuple[tuple[str, str], ...] = (
@@ -136,7 +137,14 @@ class PaperCompiler:
         interpretations = tuple(i for i in self.kernel.interpretations.all() if i.is_approved)
         decisions = tuple(self.kernel.decisions.all())
         notes = tuple(self.kernel.notes.all())
-        unresolved = tuple(c.difference for c in self.kernel.ledger.unresolved())
+        unresolved = tuple(
+            # A reader-facing limitation, not the ledger's internal difference string: row numbers,
+            # entity ids and counters are bookkeeping, and a paper must not contain them.
+            f"an unresolved disagreement about {c.subject} between a "
+            f"{c.source_a.kind.value.lower().replace('_', ' ')} source and a "
+            f"{c.source_b.kind.value.lower().replace('_', ' ')} source"
+            for c in self.kernel.ledger.unresolved()
+        )
 
         if not literature_claims:
             warnings.append(
@@ -223,6 +231,9 @@ class PaperCompiler:
             compiled_by=principal.name,
             warnings=list(context.warnings),
         )
+        if context.frontier:
+            # Dashboard state, not paper content: it counts claims, experiments and conflicts.
+            artifact.warnings.append(f"current frontier: {context.frontier}")
 
         builders = {
             PaperSection.ABSTRACT: self._abstract,
@@ -392,18 +403,29 @@ class PaperCompiler:
         question = context.core_question.rstrip("?").strip()
         return question[:180] if question and question != "(no core question)" else "Untitled research artifact"
 
+    def _question_clause(self, question: str) -> str:
+        """Phrase the core question without producing ungrammatical prose.
+
+        Research questions are frequently already interrogative ("Does X determine Y?"), so the naive
+        ``"We study whether " + question`` reads as "We study whether does X…". The phrasing is chosen
+        from the question's own shape.
+        """
+        cleaned = question.strip()
+        if not cleaned or cleaned == "(no core question)":
+            return ""
+        first = cleaned.split()[0].lower()
+        if first in {"does", "do", "is", "are", "can", "could", "should", "will", "why", "how", "what", "when", "whether"}:
+            return f"This work addresses the question: {cleaned}"
+        if cleaned.endswith("?"):
+            return f"This work addresses the question: {cleaned}"
+        return f"We study whether {cleaned[0].lower() + cleaned[1:]}"
+
     def _abstract(self, context: CompilationContext) -> SectionDraft:
         sentences: list[GroundedSentence] = []
-        has_question = context.core_question and context.core_question != "(no core question)"
+        clause = self._question_clause(context.core_question)
         sentences.append(
             self._sentence(
-                (
-                    f"We study whether {context.core_question[0].lower() + context.core_question[1:]}"
-                    if context.core_question[:1].isupper()
-                    else f"We study whether {context.core_question}"
-                )
-                if has_question
-                else "This artifact reports the current state of a research project whose core "
+                clause or "This artifact reports the current state of a research project whose core "
                 "question has not been confirmed yet.",
                 section=PaperSection.ABSTRACT,
                 level=EvidenceLevel.L1_OBSERVATION,
@@ -439,24 +461,14 @@ class PaperCompiler:
         return SectionDraft(section=PaperSection.ABSTRACT, heading="Abstract", sentences=sentences)
 
     def _introduction(self, context: CompilationContext) -> SectionDraft:
-        has_question = context.core_question and context.core_question != "(no core question)"
+        clause = self._question_clause(context.core_question)
         sentences = [
             self._sentence(
-                f"This project investigates: {context.core_question}"
-                if has_question
-                else "This artifact records a research project whose core question is still unconfirmed.",
+                clause or "This artifact records a research project whose core question is still unconfirmed.",
                 section=PaperSection.INTRODUCTION,
                 load_bearing=False,
             )
         ]
-        if context.frontier:
-            sentences.append(
-                self._sentence(
-                    f"Current frontier: {context.frontier}",
-                    section=PaperSection.INTRODUCTION,
-                    load_bearing=False,
-                )
-            )
         for claim in context.claims:
             level = self._claim_level(claim)
             sentences.append(
@@ -469,18 +481,16 @@ class PaperCompiler:
                     claim_ids=[claim.claim_id],
                 )
             )
-        for note in context.notes[:2]:
+        for note in context.notes[:1]:
             sentences.append(
                 self._sentence(
-                    f"Research notes record: {note.text[:200]}",
+                    neutralise_numerals(f"Research notes record: {note.text[:200]}"),
                     section=PaperSection.INTRODUCTION,
                     load_bearing=False,
                     note_ids=[note.note_id],
                 )
             )
         # The narrative follows the research that actually happened, not a template arc.
-        from .voice import ResearcherVoice
-
         for text, section, note_ids, decision_ids, claim_ids in ResearcherVoice(self.kernel).narrative_sentences(limit=3):
             if section is not PaperSection.INTRODUCTION:
                 continue
@@ -668,7 +678,11 @@ class PaperCompiler:
             for limitation in claim.limitations[:4]:
                 sentences.append(
                     self._sentence(
-                        f"Regarding the claim that {claim.statement.rstrip('.').lower()}: {limitation}.",
+                        # A quotation of a record carries no numerals: numbers belong to Results, where
+                        # an analysis artifact can be named for each one.
+                        neutralise_numerals(
+                            f"Regarding the claim that {claim.statement.rstrip('.').lower()}: {limitation}."
+                        ),
                         section=PaperSection.LIMITATIONS,
                         load_bearing=False,
                         claim_ids=[claim.claim_id],
@@ -688,7 +702,7 @@ class PaperCompiler:
         for conflict in context.unresolved_conflicts[:5]:
             sentences.append(
                 self._sentence(
-                    f"Unresolved source disagreement: {conflict}",
+                    f"An unresolved source disagreement remains: {conflict}.",
                     section=PaperSection.LIMITATIONS,
                     load_bearing=False,
                 )
@@ -702,9 +716,17 @@ class PaperCompiler:
     def _discussion(self, context: CompilationContext) -> SectionDraft:
         sentences: list[GroundedSentence] = []
         for decision in context.decisions[:5]:
+            # State-transition mirrors are system bookkeeping ("Applied transition str_…: …confidence
+            # 0.89"). A paper's discussion contains research design decisions, so the mirror is skipped
+            # rather than paraphrased, and any numeral that survives is neutralised.
+            if is_machine_decision(decision):
+                continue
             sentences.append(
                 self._sentence(
-                    f"Design decision ({decision.kind.value}): {decision.summary} — {decision.rationale}",
+                    neutralise_numerals(
+                        f"Design decision ({decision.kind.value.lower().replace('_', ' ')}): "
+                        f"{decision.summary} — {decision.rationale}"
+                    ),
                     section=PaperSection.DISCUSSION,
                     load_bearing=False,
                     decision_ids=[decision.decision_id],
@@ -716,13 +738,13 @@ class PaperCompiler:
         for question in open_questions[:6]:
             sentences.append(
                 self._sentence(
-                    f"Open question ({question.kind.value}): {question.statement}",
+                    neutralise_numerals(
+                        f"Open question ({question.kind.value}): {question.statement}"
+                    ),
                     section=PaperSection.DISCUSSION,
                     load_bearing=False,
                 )
             )
-        from .voice import ResearcherVoice
-
         for text, section, note_ids, decision_ids, claim_ids in ResearcherVoice(self.kernel).narrative_sentences():
             if section is not PaperSection.DISCUSSION:
                 continue

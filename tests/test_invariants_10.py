@@ -47,6 +47,8 @@ from researchos.models import (
     BenchmarkSuite,
     Claim,
     ClaimStatus,
+    ConflictKind,
+    ConflictSource,
     CoreQuestion,
     Evidence,
     EvidenceLevel,
@@ -63,6 +65,7 @@ from researchos.models import (
     SkillQualityMetrics,
     SkillStatus,
     SkillTrust,
+    SourceKind,
     StateOperation,
     TaskOutcome,
     TaskPriority,
@@ -550,6 +553,51 @@ def test_rejected_claim_is_retained(kernel):
     codes = {violation.code for violation in violations}
     assert GroundingViolationCode.REJECTED_CLAIM_CITED in codes
     assert all(v.blocks_compilation for v in violations)
+
+
+# ======================================================================================
+# Extra: the compiler never renders the system's own bookkeeping
+# ======================================================================================
+def test_compiler_never_renders_system_bookkeeping(kernel):
+    """Counters, entity ids, row numbers and confidence scores are not paper content.
+
+    They would also be ungrounded numerals — so the invariant "every numeral in the paper comes from an
+    analysis artifact" holds only if the compiler keeps its own records out of the prose in the first
+    place. This test is the guard for that whole class of mistake.
+    """
+    chain = build_supported_chain(kernel)
+    kernel.ledger.create(
+        kernel.principal("analysis"),
+        kind=ConflictKind.DESIGN,
+        subject="duplicate run retention_at_1 for the direct arm",
+        source_a=ConflictSource(kind=SourceKind.RAW_EXPERIMENT, ref="rows [4, 5]", value=[0.418, 0.418]),
+        source_b=ConflictSource(kind=SourceKind.RAW_EXPERIMENT, ref="same key", value=[0.418, 0.418]),
+        difference="the same run appears 2 times at rows [4, 5]; values are identical (double count)",
+        auto_resolve_by_trust=False,
+    )
+    kernel.record_decision(
+        kernel.human(),
+        kind="RESEARCH_DIRECTION",
+        summary="Applied transition str_01ABC: recovered a question; confidence 0.89",
+        rationale="research import recovered the core question from README.md (line 7)",
+        affected_claims=[chain.claim_id],
+    )
+
+    artifact = PaperCompiler(kernel).compile(kernel.principal("paper_writer"))
+    text = artifact.render()
+
+    for bookkeeping in (
+        "Applied transition",
+        "confidence 0.",
+        "rows [",
+        "claim candidate(s)",
+        "evidence record(s)",
+    ):
+        assert bookkeeping not in text, f"bookkeeping leaked into the paper: {bookkeeping!r}"
+    assert artifact.grounding_report is not None
+    assert artifact.grounding_report.passed, artifact.grounding_report.summary()
+    # and the conflict is still reported — as a limitation a reader can act on
+    assert "unresolved source disagreement" in text.lower()
 
 
 # ======================================================================================
