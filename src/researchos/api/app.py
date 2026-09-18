@@ -250,6 +250,20 @@ def create_app(kernel: ResearchKernel, *, enable_actions: bool = False) -> FastA
             "read_only_http": True,
         }
 
+    # ------------------------------------------------------------------ cockpit
+
+    @app.get("/cockpit", tags=["cockpit"])
+    def cockpit() -> dict[str, Any]:
+        """The research cockpit: what am I researching, what do I know, what can I not trust, why can I
+        not continue, what do I do next.
+
+        Deliberately contains no revision, hash, event head or integrity counter — those belong to the
+        audit console at ``/dashboard``. Mixing the two is what makes a research state unreadable.
+        """
+        from ..cockpit import Cockpit
+
+        return Cockpit(kernel).build().as_dict()
+
     # ------------------------------------------------------------------ dashboard
 
     @app.get("/dashboard", tags=["dashboard"])

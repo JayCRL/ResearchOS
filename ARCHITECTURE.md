@@ -483,13 +483,48 @@ skill registry · skill discovery · skill benchmark.
 **P2:** skill auto-evolution · skill synthesis · dashboard · paper compiler · researcher voice ·
 red-team loop · advanced reproducibility.
 
-Ordering rule for the whole project: *never* build the pretty UI first, *never* build an autonomous
+The ordering rule for the whole project: *never* build the pretty UI first, *never* build an autonomous
 scientist demo first. First make **research state correct, evidence traceable, and local tasks unable
-to drift**.
+to drift**. When the UI does arrive (section 9), it is a *derivation* of that state, and the audit
+console is not allowed to be the home screen.
 
 ---
 
-## 8. Reporting contract
+## 9. Two views, two questions (the dashboard is a derivation, not a dump)
+
+The first dashboard we built failed the way most research tooling fails: it rendered the *audit console*
+— revision, event head, integrity counters, evidence maturity, skill health, timeline — as the home
+screen. Everything was true and nothing was readable, because those fields answer a question the
+researcher did not ask.
+
+The fix is a split, and the split is an architectural rule rather than a styling choice:
+
+| | **Research Cockpit** (`/cockpit`, `#/`) | **Audit Console** (`/dashboard`, `#/audit`) |
+|---|---|---|
+| Question | *Where is my research, and what do I do next?* | *Is this system trustworthy?* |
+| Contains | phase, core question, current finding, what needs attention, the evidence→claim chain, paper readiness, the research map, where the project sits in its own process | revision, integrity, event head, artifact hashes, provenance completeness, conflicts, evidence maturity, skill health, timeline, import diagnostics, audit history, review queue |
+| Forbidden | revision, hashes, event head, integrity counters, skill counters | — |
+| Derived in | `researchos/cockpit.py` (deterministic, testable) | serialised models |
+| Test | `test_cockpit.py`, and `test_dashboard.py::test_cockpit_payload_has_no_system_bookkeeping` asserts the forbidden fields are absent | `test_dashboard.py` |
+
+The cockpit answers five questions and nothing else: *what am I researching · what do I know · what can I
+not trust yet · why can I not continue · what do I do next.* Three consequences worth stating:
+
+* **The phase is the earliest unmet gate**, not a mood: `QUESTION_UNCONFIRMED → IMPORT_REVIEW →
+  CONFLICT_RESOLUTION → EVIDENCE_VERIFICATION → LITERATURE_AUDIT → EXPERIMENT_DESIGN → ANALYSIS_PENDING →
+  CLAIM_VALIDATION → PAPER_COMPILATION → PAPER_READY`. Each phase carries the sentence that explains it,
+  and the gate checklist shows done / current / pending so the state machine itself is visible.
+* **Attention is derived, ordered and actionable.** One action per kind, severity first, each naming the
+  exact command and *what it blocks*. "28 items in the review queue" becomes "decide 28 reconstructed
+  items — nothing imported is a research fact until a human decides it".
+* **The research map draws only links that exist** (claim→experiment declared links, structural
+  belongs-to edges, and `SAME_SOURCE` for shared provenance — explicitly labelled as provenance, never as
+  support). A claim no experiment points at is shown unlinked, and the cockpit raises that as a blocker in
+  its own right, because a claim with no linked experiment can never leave `HYPOTHESIS`.
+
+---
+
+## 10. Reporting contract
 
 Every module lands with: `WHAT WAS BUILT · WHY · DATA MODEL · INVARIANTS · TESTS · KNOWN LIMITATIONS ·
 NEXT DEPENDENCY`. See `docs/architecture/` for the per-module notes.

@@ -11,6 +11,7 @@ Two properties matter more than the markup:
 
 from __future__ import annotations
 
+import json
 import re
 
 import pytest
@@ -21,24 +22,31 @@ from researchos.models import ClaimStatus, RejectionBasis
 fastapi = pytest.importorskip("fastapi", reason="the dashboard is part of the optional api extra")
 from fastapi.testclient import TestClient  # noqa: E402
 
-#: Panel titles the dashboard must render (spec §21 — the first UI version's required content).
-REQUIRED_PANELS: tuple[str, ...] = (
-    "Core question",
-    "Current claims",
-    "Evidence coverage",
-    "Current experiments",
+#: Panel titles the two views must render.
+#:
+#: The split matters: the cockpit answers "where is my research?" and must not contain system
+#: bookkeeping; the audit console answers "is this system trustworthy?" and holds exactly that.
+COCKPIT_PANELS: tuple[str, ...] = (
+    "Needs your attention",
+    "Evidence → claims",
+    "Paper readiness",
+    "Research map",
+    "Where the project is in its own process",
+    "System & audit",
+)
+AUDIT_PANELS: tuple[str, ...] = (
+    "Claims",
+    "Conflicts",
+    "Evidence",
+    "Rejected claims",
     "Literature map",
     "Closest prior work",
     "Open questions",
-    "Rejected claims",
-    "Research decisions",
-    "Active task",
     "Skill health & gaps",
-    "Skill gaps",
-    "Paper readiness",
+    "Audits, red team, compiled papers",
     "Research timeline",
     "Human review queue",
-    "Conflicts",
+    "Experiments",
 )
 
 
@@ -49,6 +57,26 @@ def ready_kernel(kernel):
     from researchos.models.review import ReviewItem, ReviewKind
 
     chain = build_supported_chain(kernel)
+    # a confirmed core question, set the only way guarded state may change: an approved transition
+    from researchos.models import StateOperation
+
+    request = kernel.transitions.request(
+        kernel.human(),
+        operations=[
+            StateOperation(
+                op="set",
+                path="core_question",
+                value={
+                    "statement": "Does write placement determine fast-weight retention?",
+                    "scope": "gpt2-small, 124M, wikitext-103",
+                },
+            )
+        ],
+        reason="the project question, confirmed by the researcher",
+        evidence_ids=[chain.evidence_id],
+    )
+    kernel.transitions.approve(kernel.human(), request.str_id, note="confirmed")
+
     lifecycle = ClaimLifecycle(kernel)
     cancelled = lifecycle.create(
         kernel.principal("claim_manager"),
@@ -99,10 +127,86 @@ def test_dashboard_html_is_self_contained(ready_kernel):
     assert "const ACTIONS_ENABLED = false;" in html
 
 
-def test_dashboard_renders_every_required_panel(ready_kernel):
+def test_both_views_render_every_required_panel(ready_kernel):
     html = _client(ready_kernel).get("/").text
-    for title in REQUIRED_PANELS:
-        assert title in html, f"dashboard is missing the {title!r} panel"
+    for title in COCKPIT_PANELS:
+        assert title in html, f"the cockpit is missing the {title!r} panel"
+    for title in AUDIT_PANELS:
+        assert title in html, f"the audit console is missing the {title!r} panel"
+    # both views exist and are reachable
+    assert 'data-view="cockpit"' in html and 'data-view="audit"' in html
+    assert "renderCockpit" in html and "renderAudit" in html
+
+
+def test_cockpit_payload_has_no_system_bookkeeping(ready_kernel):
+    """The whole point of the split: the first screen must not carry revision, hashes or counters."""
+    payload = _client(ready_kernel).get("/cockpit").json()
+    for forbidden in (
+        "integrity",
+        "revision",
+        "head",
+        "event_hash",
+        "describe",
+        "evidence_summary",
+        "conflicts_summary",
+        "skills",
+        "counts_by_severity",
+    ):
+        assert forbidden not in payload, f"the cockpit payload must not expose {forbidden!r}"
+    serialised = json.dumps(payload).lower()
+    for leak in ("event head", "sha256", "prev_hash", "revision"):
+        assert leak not in serialised, f"cockpit payload leaks {leak!r}"
+    # and the audit console does expose them, so nothing is lost
+    audit = _client(ready_kernel).get("/dashboard").json()
+    assert "integrity" in audit and "describe" in audit
+
+
+def test_cockpit_answers_the_five_questions(ready_kernel):
+    payload = _client(ready_kernel).get("/cockpit").json()
+    assert payload["phase"] and payload["phase_label"] and payload["phase_reason"]
+    assert payload["core_question"]
+    assert payload["current_finding"]
+    assert payload["gates"], "the state machine checklist must be present"
+    assert payload["attention"], "the next actions must be present"
+    assert payload["not_ready"], "why a paper cannot be written yet must be present"
+    assert payload["research_map"]["nodes"]
+
+
+def test_cockpit_attention_is_ordered_and_actionable(ready_kernel):
+    payload = _client(ready_kernel).get("/cockpit").json()
+    severity_order = {"BLOCKER": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3, "INFO": 4}
+    ranks = [severity_order[action["severity"]] for action in payload["attention"]]
+    assert ranks == sorted(ranks), "attention must be ordered by severity"
+    kinds = [action["kind"] for action in payload["attention"]]
+    assert len(kinds) == len(set(kinds)), "one action per kind; a list that repeats itself is not read"
+    for action in payload["attention"]:
+        assert action["title"] and action["why"]
+        assert action["blocks"], f"{action['kind']} must say what it blocks"
+        assert action["command"], f"{action['kind']} must carry the exact command"
+
+
+def test_cockpit_map_only_draws_links_that_exist(ready_kernel):
+    payload = _client(ready_kernel).get("/cockpit").json()
+    nodes = {node["node_id"] for node in payload["research_map"]["nodes"]}
+    for edge in payload["research_map"]["edges"]:
+        assert edge["source"] in nodes and edge["target"] in nodes
+        assert edge["relation"] in {
+            "BELONGS_TO",
+            "TESTS",
+            "CONTRADICTS",
+            "SAME_SOURCE",
+            "OPENS",
+            "FOLLOWS_UP",
+        }
+
+
+def test_cockpit_readiness_is_summarised_then_expandable(ready_kernel):
+    readiness = _client(ready_kernel).get("/cockpit").json()["readiness_digest"]
+    assert len(readiness["dimensions"]) == 7
+    assert "note" in readiness and "total score" in readiness["note"]
+    for dimension in readiness["dimensions"]:
+        assert dimension["basis"]
+        assert dimension["label"]
 
 
 def test_every_endpoint_the_dashboard_calls_exists(ready_kernel):

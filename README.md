@@ -61,7 +61,7 @@ researchos skill evolve --from <skill-a>,<skill-b> --rule "every claim needs a l
 `researchos --help` lists every command. A step-by-step usage guide (with real output, what each refusal
 means, a command cheat sheet and the Python API) is in [`docs/usage.zh-CN.md`](docs/usage.zh-CN.md) (Chinese).
 
-### Dashboard
+### Dashboard: a cockpit, not a status dump
 
 ```bash
 pip install -e ".[api]"
@@ -69,12 +69,19 @@ researchos api                 # → http://127.0.0.1:8765/
 researchos api --enable-actions   # + human-in-the-loop buttons (local clients only)
 ```
 
-One HTML file, **no build step, no npm, no CDN** — it must still open in five years, offline. It shows
-the research state the way the spec requires: core question, claims with the language their evidence
-permits, rejected claims, evidence coverage, experiments with their design gaps, conflicts with the
-provenance trust order, the literature map with closest prior work and novelty verdicts, open questions,
-research decisions, the active task, skill health and gaps, the timeline, and **seven separate paper
-readiness dimensions with no single total**.
+One HTML file, **no build step, no npm, no CDN** — it must still open in five years, offline. It has
+**two views**, and keeping them apart is a design rule rather than a styling choice:
+
+| | **Research Cockpit** (`#/`, default) | **Audit Console** (`#/audit`) |
+|---|---|---|
+| Question | *Where is my research, and what do I do next?* | *Is this system trustworthy?* |
+| Shows | research phase, core question, what is currently known, **what needs your attention** (severity-ordered, each with the exact command and what it blocks), the evidence → claim chain (why a claim cannot move up), paper readiness (*Not ready* + reasons, seven dimensions behind a disclosure), the **research map**, and where the project sits in its own process | revision, integrity, event head, hashes, provenance, conflicts, evidence maturity, skill health, timeline, import diagnostics, audit history, review queue |
+| Never shows | revision, hashes, event head, integrity counters, skill counters | — |
+
+The home screen answers five questions and nothing else: *what am I researching · what do I know · what
+can I not trust yet · why can I not continue · what do I do next.* The phase is the **earliest unmet
+gate** rather than a mood, and the research map draws **only links that exist** — a claim no experiment
+points at is shown unlinked *and* raised as a blocker, because such a claim can never leave `HYPOTHESIS`.
 
 The dashboard is a **view**: `.researchos/` stays the source of truth. Writes are off unless you pass
 `--enable-actions`, and even then they run as the **human principal through the same kernel gate as the

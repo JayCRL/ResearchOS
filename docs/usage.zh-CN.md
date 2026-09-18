@@ -393,7 +393,7 @@ proposal = agents["claim_manager"].request_approval("<claim_id>", reason="义务
 print(proposal.describe())
 ```
 
-只读 HTTP 接口 + 看板（给看板 / 笔记本 / 评审人用）：
+只读 HTTP 接口 + 看板（给研究者每天看 / 给评审人看）：
 
 ```powershell
 pip install -e ".[api]"
@@ -401,10 +401,46 @@ researchos api --root D:\my-project                  # → http://127.0.0.1:8765
 researchos api --root D:\my-project --enable-actions # 额外启用"人在回路"按钮
 ```
 
-看板是**单个 HTML 文件，零构建、零 npm、零 CDN**（离线可用、五年后仍能打开）。它显示规范要求的全部面板：
-核心问题、claim（含其证据允许的措辞）、被否决的 claim、证据覆盖、实验与设计缺口、冲突与信任序、文献图与
-最接近先行工作、新颖性结论、开放问题、研究决策、当前任务、技能健康与缺口、研究时间线，以及**论文就绪度的
-7 个独立维度（无总分）**。
+看板是**单个 HTML 文件，零构建、零 npm、零 CDN**（离线可用、五年后仍能打开），并分成**两个视图**：
+
+### Research Cockpit（`#/`，默认）—— 回答"我研究到哪了？"
+
+```
+1. 我在研究什么？     → 核心问题（未确认时会标出 placeholder）
+2. 我已经知道什么？   → 当前可知的最强结论 + 它的证据等级与"允许的措辞"
+3. 哪些还不能信？     → 证据→claim 链条上被阻断的那一环
+4. 为什么不能继续？   → Paper readiness: Not ready + 原因（7 个维度折叠在后面，故意没有总分）
+5. 我下一步做什么？   → Needs your attention：按严重度排序，每条带确切命令与"它阻断了什么"
+```
+
+**研究阶段不是心情，而是"最早未完成的 gate"**：
+
+```
+QUESTION_UNCONFIRMED → IMPORT_REVIEW → CONFLICT_RESOLUTION → EVIDENCE_VERIFICATION
+→ LITERATURE_AUDIT → EXPERIMENT_DESIGN → ANALYSIS_PENDING → CLAIM_VALIDATION
+→ PAPER_COMPILATION → PAPER_READY
+```
+
+首页还画出**研究地图**，而且**只画记录里真实存在的关联**：
+
+| 关系 | 含义 |
+|---|---|
+| `BELONGS_TO` | 结构性：该 claim / experiment 属于本项目（不是科学主张） |
+| `TESTS` | claim 显式声明了支撑它的实验（或 experiment 声明它服务的 claim） |
+| `CONTRADICTS` | claim 显式声明的矛盾实验 |
+| `SAME_SOURCE` | **同源≠支持**：来自同一个文件；导入不会把它升级为"支持" |
+| `OPENS` | 该 claim 引出的开放问题 |
+
+所以"9 个 claim 与 3 个 experiment 互不连接"会**如实显示为未连接**，并单独成为一条阻断项——因为
+没有关联实验的 claim 永远无法离开 `HYPOTHESIS`。
+
+**复核队列是 Inbox，不是垃圾桶**：点 "Start review" 进入逐条模式，显示进度 `3 / 28`，
+键盘 `a` 接受 / `r` 拒绝 / `d` 推迟 / `s` 跳过 / `Esc` 退出。
+
+### Audit Console（`#/audit`）—— 回答"这套系统可信吗？"
+
+revision、integrity 问题、event head、哈希不一致、provenance 完整度、冲突明细与信任序、证据成熟度、
+技能健康与缺口、研究时间线、导入诊断、审计与红队历史、复核队列全量。
 
 **它是视图，不是第二权威。**写操作默认关闭；`--enable-actions` 开启后也只在**本机客户端**可用，并且以
 human principal 身份走**与 CLI 完全相同的 kernel 门禁**：

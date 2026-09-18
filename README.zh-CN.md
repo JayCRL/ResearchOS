@@ -66,10 +66,17 @@ researchos api                    # → http://127.0.0.1:8765/
 researchos api --enable-actions   # 额外启用"人在回路"按钮（仅本机客户端）
 ```
 
-单个 HTML 文件，**零构建、零 npm、零 CDN**——五年后离线也能打开。它按规定显示研究状态：核心问题、
-claim 及其证据允许的措辞、被否决的 claim、证据覆盖、实验及其设计缺口、冲突与 provenance 信任序、
-文献图（含最接近的先行工作与新颖性结论）、开放问题、研究决策、当前任务、技能健康与缺口、研究时间线，
-以及**论文就绪度的 7 个独立维度（故意没有总分）**。
+单个 HTML 文件，**零构建、零 npm、零 CDN**——五年后离线也能打开。它分成**两个视图**，这个划分是设计规则而不是配色选择：
+
+| | **Research Cockpit**（`#/`，默认） | **Audit Console**（`#/audit`） |
+|---|---|---|
+| 回答 | *我的研究走到哪了？下一步做什么？* | *这套系统可信吗？* |
+| 内容 | 研究阶段、核心问题、当前可知的结论、**需要你处理的事**（按严重度排序、每条给出确切命令与"它阻断了什么"）、证据→claim 链条（为什么还不能升级）、论文就绪度（Not ready + 原因，7 维折叠展开）、**研究地图**（只画真实存在的关联）、项目在自身流程中的位置（reconstruct→review→resolve→verify→literature→analyse→promote→compile） | revision、integrity、event head、哈希、provenance、冲突明细、证据成熟度、技能健康、时间线、导入诊断、审计历史、复核队列 |
+| 禁止出现 | revision / 哈希 / event head / integrity 计数器 / 技能计数 | — |
+
+首页只回答五个问题：**我在研究什么 · 我已经知道什么 · 哪些还不能信 · 为什么现在不能继续 · 我下一步做什么。**
+
+阶段不是心情，而是**最早未完成的 gate**：`QUESTION_UNCONFIRMED → IMPORT_REVIEW → CONFLICT_RESOLUTION → EVIDENCE_VERIFICATION → LITERATURE_AUDIT → EXPERIMENT_DESIGN → ANALYSIS_PENDING → CLAIM_VALIDATION → PAPER_COMPILATION → PAPER_READY`。地图只画记录里真实存在的边（claim→experiment 的声明关联、结构性 belongs-to、以及明确标注"同源而非支持"的 `SAME_SOURCE`）；一个没有实验指向的 claim 会显示为未连接，并**本身成为一条阻断项**——因为没有关联实验的 claim 永远无法离开 `HYPOTHESIS`。
 
 看板只是**视图**：真值源仍是 `.researchos/`。除非加 `--enable-actions`，否则没有任何写操作；即使启用，
 它也是**以 human principal 身份、走与 CLI 完全相同的 kernel 门禁**——证据不足的 claim 照样被拒、过期的
