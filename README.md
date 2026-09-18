@@ -1,5 +1,7 @@
 # README
 
+**English** | [简体中文](README.zh-CN.md)
+
 **ResearchOS is a Research Operating System for AI/ML science.** Not a chat assistant, not an AI paper
 writer. It makes **research direction, evidence, claims, literature context and skills** into structured
 state that both humans and machines can audit.
