@@ -478,6 +478,22 @@ class PaperCompiler:
                     note_ids=[note.note_id],
                 )
             )
+        # The narrative follows the research that actually happened, not a template arc.
+        from .voice import ResearcherVoice
+
+        for text, section, note_ids, decision_ids, claim_ids in ResearcherVoice(self.kernel).narrative_sentences(limit=3):
+            if section is not PaperSection.INTRODUCTION:
+                continue
+            sentences.append(
+                self._sentence(
+                    text,
+                    section=section,
+                    load_bearing=False,
+                    note_ids=note_ids,
+                    decision_ids=decision_ids,
+                    claim_ids=claim_ids,
+                )
+            )
         return SectionDraft(section=PaperSection.INTRODUCTION, heading="Introduction", sentences=sentences)
 
     def _related_work(self, context: CompilationContext) -> SectionDraft:
@@ -703,6 +719,21 @@ class PaperCompiler:
                     f"Open question ({question.kind.value}): {question.statement}",
                     section=PaperSection.DISCUSSION,
                     load_bearing=False,
+                )
+            )
+        from .voice import ResearcherVoice
+
+        for text, section, note_ids, decision_ids, claim_ids in ResearcherVoice(self.kernel).narrative_sentences():
+            if section is not PaperSection.DISCUSSION:
+                continue
+            sentences.append(
+                self._sentence(
+                    text,
+                    section=section,
+                    load_bearing=False,
+                    note_ids=note_ids,
+                    decision_ids=decision_ids,
+                    claim_ids=claim_ids,
                 )
             )
         return SectionDraft(section=PaperSection.DISCUSSION, heading="Discussion", sentences=sentences)

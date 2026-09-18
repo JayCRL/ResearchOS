@@ -145,8 +145,16 @@ researchos agent list
 ## Testing
 
 ```bash
-python -m pytest -q                 # 136 tests
+python -m pytest -q                 # 180 tests
 python -m pytest -m invariant -q    # the ten invariants only
+```
+
+The read-only HTTP surface (optional extra) and the researcher-voice view:
+
+```bash
+pip install -e ".[api]"
+researchos api --port 8765          # read-only: writes need an explicit principal, so they are not on HTTP
+researchos paper voice              # the real research arc + the researcher's own voice fingerprint
 ```
 
 The invariant suite is the product, not the proof of it. It asserts, among other things, that an agent

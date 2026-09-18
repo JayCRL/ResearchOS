@@ -1264,6 +1264,46 @@ def paper_readiness(root: Optional[Path] = typer.Option(None, "--root")) -> None
 # ======================================================================================
 
 
+@paper_app.command("voice")
+def paper_voice(root: Optional[Path] = typer.Option(None, "--root")) -> None:
+    """Show the real research arc and the researcher's own voice fingerprint."""
+    from ..paper import ResearcherVoice
+
+    kernel = _kernel(root)
+    voice = ResearcherVoice(kernel)
+    arc = voice.arc()
+    console.print(f"[bold]REAL RESEARCH ARC[/bold] ({len(arc)} step(s))")
+    table = Table("phase", "when", "what")
+    for step in arc:
+        table.add_row(step.phase, (step.at or "")[:16], step.title[:88])
+    console.print(table)
+    _json(voice.profile().as_dict())
+    sentences = voice.narrative_sentences()
+    if sentences:
+        console.print("[bold]narrative sentences the compiler may use[/bold]")
+        for text, section, _notes, _decisions, _claims in sentences:
+            console.print(f"  [{section.value}] {text}")
+
+
+@app.command("api")
+def api_command(
+    host: str = typer.Option("127.0.0.1", "--host"),
+    port: int = typer.Option(8765, "--port"),
+    root: Optional[Path] = typer.Option(None, "--root"),
+) -> None:
+    """Serve the read-only HTTP surface (requires ``pip install researchos[api]``)."""
+    try:
+        import uvicorn  # type: ignore
+    except ImportError:
+        _fail("uvicorn is not installed: pip install 'researchos[api]'")
+    from ..api.app import app_for_project
+
+    kernel = _kernel(root)
+    console.print(f"[bold]read-only API[/bold] http://{host}:{port} (project {kernel.root})")
+    console.print("[dim]writes are not exposed over HTTP: mutations need an explicit principal[/dim]")
+    uvicorn.run(app_for_project(str(kernel.root)), host=host, port=port, log_level="info")
+
+
 @agent_app.command("list")
 def agent_list(root: Optional[Path] = typer.Option(None, "--root")) -> None:
     """List the fifteen agents with their capability counts and what they may NOT do."""

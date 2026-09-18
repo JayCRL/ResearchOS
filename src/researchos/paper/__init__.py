@@ -25,6 +25,7 @@ from .grounding import (
 )
 from .readiness import ReadinessAssessor
 from .style_audit import StyleAuditor
+from .voice import ResearcherVoice, VoiceProfile, VoiceStep, voice_context
 
 __all__ = [
     "CompilationContext",
@@ -32,8 +33,11 @@ __all__ = [
     "PRINTABLE_FIELDS",
     "PaperCompiler",
     "ReadinessAssessor",
+    "ResearcherVoice",
     "StyleAuditor",
     "TextProposer",
+    "VoiceProfile",
+    "VoiceStep",
     "compile_paper",
     "extract_numerals",
     "verify_citations",
@@ -41,4 +45,5 @@ __all__ = [
     "verify_language",
     "verify_numbers",
     "verify_paper",
+    "voice_context",
 ]

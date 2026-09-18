@@ -2,7 +2,7 @@
 
 Every module is reported in the required form: **WHAT WAS BUILT · WHY · DATA MODEL · INVARIANTS ·
 TESTS · KNOWN LIMITATIONS · NEXT DEPENDENCY**. Line and test counts are from the current tree
-(88 source files, ~30,800 lines; 136 tests, ~2,900 lines).
+(90 source files, ~32,000 lines; 180 tests, ~3,400 lines).
 
 ---
 
@@ -213,6 +213,41 @@ TESTS · KNOWN LIMITATIONS · NEXT DEPENDENCY**. Line and test counts are from t
 * **WHY**: a researcher handing over a project wants the *history* back, not only the current state.
 * **TESTS**: `test_import_dla.py::test_import_is_recorded_in_the_event_log_and_timeline`,
   `test_timeline_redteam_evolution.py::test_timeline_records_imported_material_as_imported`.
+
+## 16. `api/` — read-only HTTP surface (§23)
+
+* **WHAT**: a FastAPI app (`create_app(kernel)`) exposing health, state, claims (+ obligations),
+  evidence (+ provenance trace), experiments, analyses, conflicts, audits, review queue, literature
+  coverage/novelty/prior-art, timeline (+ summary, per-claim history, `why`), readiness, agents, skills
+  and the capability table. `researchos api` serves it.
+* **WHY**: v1 is CLI *and* API. But every mutation in ResearchOS carries an explicit principal and a
+  capability check, and an HTTP write endpoint is the easiest place for ambient authority to reappear —
+  so the surface is **read-only by design**, and a test asserts that write methods return 404/405.
+* **DATA MODEL**: no new objects; serialised models plus derived views.
+* **INVARIANTS**: preserves the permission model by not offering a bypass.
+* **TESTS**: `test_api_and_voice.py` (22 route/permission assertions).
+* **LIMITATIONS**: read-only (no task triggering over HTTP), no auth layer (bind to localhost or put it
+  behind a proxy), no pagination.
+* **NEXT**: authenticated, principal-carrying write endpoints that reuse the same gate — never a bypass.
+
+## 17. `paper/voice.py` — researcher voice (§18)
+
+* **WHAT**: `ResearcherVoice` reconstructs the real research arc from records (observation → hypothesis →
+  anomaly → control → revision → claim), measures a style fingerprint from the researcher's **own notes**,
+  detects a faked confirmation arc (`distortion`), and emits grounded, numeral-free narrative sentences
+  that the compiler injects into the Introduction/Method/Discussion/Conclusion.
+* **WHY**: the spec's requirement is not "sound more human" — it is that the narrative follow the research
+  that actually happened. A draft claiming `hypothesis → confirmation` while the timeline shows an anomaly
+  and a hypothesis revision is a false account of the method.
+* **DATA MODEL**: `VoiceStep` (phase + the note/decision/claim ids it came from), `VoiceProfile`
+  (sentence-length mean/std, first-person ratio, hedge ratio), `voice_context` for a writer or model.
+* **INVARIANTS**: every narrative sentence points at a record or is not emitted; no numerals can enter the
+  narrative (numbers must come from analysis artifacts).
+* **TESTS**: `test_api_and_voice.py`.
+* **LIMITATIONS**: the arc phases are deterministic templates over records; it does not learn phrasing
+  from published papers (deliberately); a project with no notes produces no narrative sentences.
+* **NEXT**: a `TextProposer` implementation that rewrites narrative sentences in the measured voice while
+  the grounding gates re-verify them.
 
 ## 10. `agents/` — Agent OS
 
