@@ -588,6 +588,7 @@ class QueryPlanner:
         seen: set[str] = set()
         created = 0
         updated = 0
+        skipped: list[str] = []
         for record in records:
             key = record.identity_key()
             if key in seen:
@@ -595,6 +596,11 @@ class QueryPlanner:
             seen.add(key)
             existing = by_key.get(key)
             if existing is None:
+                if record.raw.get("_title_missing"):
+                    # A record without a real title is not a paper. Skipping it keeps the map honest;
+                    # the provider mapping is the thing to fix.
+                    skipped.append(f"{record.provider.value}:{record.provider_id}")
+                    continue
                 paper = _paper_from_record(record)
                 store.save(paper)
                 by_key[key] = paper
@@ -616,6 +622,7 @@ class QueryPlanner:
                     "records": len(records),
                     "created": created,
                     "updated": updated,
+                    "skipped_untitled": skipped[:20],
                     "providers": sorted({record.provider.value for record in records}),
                 },
             )
@@ -811,7 +818,17 @@ _FALLBACK_SUFFIX: Mapping[QueryFamily, str] = {
 
 
 def _paper_from_record(record: ProviderRecord) -> LiteraturePaper:
-    """Build an abstract-level paper. Never a mechanism claim — the model would reject it."""
+    """Build an abstract-level paper. Never a mechanism claim — the model would reject it.
+
+    Refuses records whose title is missing (``raw["_title_missing"]``): such a record's "title" is a
+    provider identifier, and turning it into a paper would put a fabricated name into the literature
+    map. A provider that mis-maps its envelope must be fixed, not absorbed.
+    """
+    if record.raw.get("_title_missing"):
+        raise LiteratureError(
+            f"{record.provider.value} record {record.provider_id!r} has no title; refusing to create a "
+            "paper from an identifier (fix the provider mapping instead)"
+        )
     return LiteraturePaper(
         title=record.title,
         authors=list(record.authors),

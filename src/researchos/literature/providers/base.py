@@ -313,11 +313,21 @@ def build_record(
     """Assemble a :class:`ProviderRecord` without letting a missing field abort the parse.
 
     Every provider maps its own envelope onto this one constructor, so "what a record is" is
-    defined in exactly one place. ``title`` falls back to the provider identifier because
-    ``ProviderRecord.title`` has ``min_length=1`` and dropping an otherwise usable hit would
-    under-report coverage.
+    defined in exactly one place.
+
+    ``title`` falls back to the provider identifier because ``ProviderRecord.title`` has
+    ``min_length=1``. That fallback is a last resort for a malformed envelope, *not* a licence to
+    create a paper: the record is marked ``raw["_title_missing"] = True`` so the ingest path can
+    refuse it. A title invented from an id would poison the literature map and the closest-prior-work
+    ranking, which is the opposite of what this system is for.
     """
-    clean_title = clean_text(title) or clean_text(provider_id) or "untitled"
+    clean_title = clean_text(title)
+    title_missing = not clean_title
+    if title_missing:
+        clean_title = clean_text(provider_id) or "untitled"
+    raw_payload = dict(raw or {})
+    if title_missing:
+        raw_payload["_title_missing"] = True
     return ProviderRecord(
         provider=provider,
         provider_id=str(provider_id),
@@ -336,7 +346,7 @@ def build_record(
         license=clean_text(license) or None,
         query=query,
         score=score,
-        raw=dict(raw or {}),
+        raw=raw_payload,
     )
 
 

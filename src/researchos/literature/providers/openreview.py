@@ -75,7 +75,12 @@ class OpenReviewProvider(LiteratureProvider):
         url = self.search_url(query, limit=limit)
         data = self._json(url)
         notes = _notes(data)
-        records = [self._record(note, url=url, query=query) for note in notes]
+        # The search endpoint returns *every* note matching the term, including review notes, replies
+        # and metadata notes. Only a note that carries its own title is a submission: ingesting a review
+        # as a paper produces entries titled with a note id, which then poison the literature map and
+        # the closest-prior-work ranking.
+        submissions = [note for note in notes if _is_submission(note)]
+        records = [self._record(note, url=url, query=query) for note in submissions]
         records = [r for r in records if r.title]
         return records[: max(0, limit)]
 
@@ -136,6 +141,37 @@ def _notes(data: Any) -> list[Mapping[str, Any]]:
     if isinstance(data, list):
         return [note for note in data if isinstance(note, Mapping)]
     return []
+
+
+#: Review/reply content fields. A note that carries these and no title is a *review of* a paper, not a
+#: paper, and must never be ingested as one.
+REVIEW_CONTENT_FIELDS: tuple[str, ...] = (
+    "summary", "soundness", "presentation", "contribution", "strengths", "weaknesses", "rating",
+    "confidence", "recommendation", "metareview", "decision",
+)
+
+
+def _is_submission(note: Mapping[str, Any]) -> bool:
+    """A note is a submission only if it declares its own title.
+
+    Reviews, replies and metadata notes do not, so they are skipped rather than papered over with an
+    identifier-shaped title.
+    """
+    content = note.get("content")
+    if not isinstance(content, Mapping):
+        return False
+    if not (_value(content, "title") or ""):
+        return False
+    if note.get("replyto"):
+        return False
+    return True
+
+
+def looks_like_review(content: Mapping[str, Any]) -> bool:
+    """True when a content payload has review fields and no title — used for diagnostics."""
+    if _value(content, "title"):
+        return False
+    return any(_value(content, field) for field in REVIEW_CONTENT_FIELDS)
 
 
 def _value(content: Mapping[str, Any], key: str) -> Any:

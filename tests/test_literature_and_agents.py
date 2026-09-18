@@ -498,6 +498,51 @@ def test_permitted_verbs_are_ordered_by_level():
     assert language_class("We find a difference") == "FINDING"
 
 
+@pytest.mark.invariant
+def test_records_without_a_title_never_become_papers(kernel):
+    """A provider identifier is not a title.
+
+    An envelope that fails to declare a title must be fixed at the provider; ingesting it would put a
+    fabricated paper name into the literature map and into the closest-prior-work ranking.
+    """
+    from researchos.literature.providers.base import build_record
+
+    record = build_record(ProviderKind.OPENREVIEW, "abc123XYZ", "")
+    assert record.raw.get("_title_missing") is True
+
+    planner = QueryPlanner(kernel)
+    created = planner.ingest(kernel.principal("literature_researcher"), [record])
+    assert created == []
+    assert kernel.papers.all() == []
+    events = [
+        event for event in kernel.events.iter_records() if event.kind == "literature.papers_ingested"
+    ]
+    assert events and events[-1].payload.get("skipped_untitled")
+
+
+def test_openreview_review_notes_are_not_papers():
+    """The search endpoint returns reviews too; only a note with its own title is a submission."""
+    from researchos.literature.providers.openreview import _is_submission, looks_like_review
+
+    review = {
+        "id": "Xyz",
+        "replyto": "ForumId",
+        "content": {"summary": {"value": "the paper proposes"}, "soundness": {"value": "2 fair"}},
+    }
+    assert _is_submission(review) is False
+    assert looks_like_review(review["content"]) is True
+
+    submission = {
+        "id": "Abc",
+        "content": {"title": {"value": "A real paper"}, "abstract": {"value": "we study"}},
+    }
+    assert _is_submission(submission) is True
+    assert looks_like_review(submission["content"]) is False
+
+    # a title-less note is never a submission, whatever else it contains
+    assert _is_submission({"id": "Q", "content": {"abstract": {"value": "no title here"}}}) is False
+
+
 def test_welch_test_is_available_to_the_analysis_layer():
     result = welch_t_test([0.421, 0.416, 0.418], [0.274, 0.269, 0.271])
     assert result.p_value is not None and result.p_value < 0.01
