@@ -50,8 +50,7 @@ ENTITY_DIRS: dict[str, str] = {
     "grounding_report": "paper/audits",
     "red_team_report": "paper/audits",
     "readiness": "paper/audits",
-    "interpretation": "analysis/interpretations",
-}
+    "interpretation": "analysis/interpretations",}
 
 #: Directories created by ``researchos init``.
 STANDARD_DIRS: tuple[str, ...] = (

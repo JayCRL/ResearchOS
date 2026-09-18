@@ -153,21 +153,66 @@ TESTS · KNOWN LIMITATIONS · NEXT DEPENDENCY**. Line and test counts are from t
 ## 9. `skills/` — Skill Intelligence Layer
 
 * **WHAT**: `SkillRegistry` (register/route/install/audit, health), `SkillSandbox` (static denylist +
-  protected-path detection + declared capability ceiling), `BenchmarkHarness` + a 16+ task default
+  protected-path detection + declared capability ceiling), `BenchmarkHarness` + a 20-task default
   catalogue across four suites, `SkillLifecycle` (legal transitions, activation gates, regression,
-  rollback), `SkillDiscoveryAgent` (deterministic gap detection from audits/failures/conflicts, capability
-  queries, synthesis A+B+rule→C).
+  rollback), `SkillDiscoveryAgent` (deterministic gap detection from audits/failures/conflicts,
+  capability queries, synthesis A+B+rule→C), and `SkillEvolution` — an executable pipeline that runs a
+  candidate through sandbox → benchmark → regression → ACTIVE or REJECT, plus
+  `deterministic_runner` (a scoring runner that uses the harness's own gates) and `quality_from_benchmark`.
 * **WHY**: skills are where a research system either improves or rots. "The code runs" is not quality, so
-  quality is eight measured dimensions and activation is earned.
+  quality is eight measured dimensions and activation is earned. Making the loop *executable* is what
+  separates a lifecycle diagram from a lifecycle.
 * **DATA MODEL**: SkillCard, SkillVersion, SkillCapability, SkillQualityMetrics, BenchmarkTask,
-  TaskOutcome, BenchmarkRun, SandboxReport, SkillGap.
+  TaskOutcome, BenchmarkRun, SandboxReport, SkillGap; `EvolutionResult` records every stage.
 * **INVARIANTS**: 7, 8.
-* **TESTS**: `test_invariants_10.py` (activation + regression); registry/sandbox modules are exercised
-  through the CLI and invariant tests.
-* **LIMITATIONS**: the sandbox is static analysis only (it does not execute untrusted code — by design);
-  the benchmark runner is injected, so no LLM-backed skill is benchmarked end-to-end yet; synthesis
-  produces candidates whose *quality* is measured but whose scientific value is not.
-* **NEXT**: a published benchmark result set per skill, plus regression history in the registry.
+* **TESTS**: `test_timeline_redteam_evolution.py` (activation, regression rejection even when the
+  aggregate score rises, sandbox rejection, event-log trail) + `test_invariants_10.py`.
+* **LIMITATIONS**: the sandbox is static analysis only (it never executes untrusted code — by design);
+  a real benchmark needs an injected runner, so no LLM-backed skill is benchmarked end to end yet;
+  synthesis produces candidates whose *quality* is measured but whose scientific value is not.
+* **NEXT**: per-skill published benchmark history and a `--baseline` comparison across releases.
+
+## 13. `kernel/timeline.py` + `researchos timeline` — the research history (§20)
+
+* **WHAT**: `TimelineView`, a read-only view that groups the append-only timeline into the phases a
+  project actually passes through (observation → hypothesis → experiment → analysis → revision → claim →
+  paper), explains any object via `why(ref=…)`, reconstructs a claim's full history
+  (`claim_history`), and routes the four standing questions (why was the claim cancelled, why did the
+  route change, why was this control added, why is this result not in the paper).
+* **WHY**: the difference between a research log and a chat transcript is that the log can be *queried
+  for reasons*. Import marks every recovered event `imported=True`, with real dates from diaries and git
+  where they exist.
+* **DATA MODEL**: `TimelineEvent` (kind, refs, actor, state revision, imported flag) + decisions,
+  transitions and claim history joined at read time.
+* **INVARIANTS**: rejected claims remain explainable (10); direction changes are always traceable (2).
+* **TESTS**: `test_timeline_redteam_evolution.py`.
+* **LIMITATIONS**: `why()` is keyword/ref based, not semantic; imported events without source dates are
+  timestamped at import time and flagged rather than guessed.
+* **NEXT**: a `timeline export --format latex` narrative for the paper's introduction.
+
+## 14. `researchos redteam` — the adversarial loop (§19)
+
+* **WHAT**: `RedTeamAgent.review` builds falsification questions, alternative explanations, single-seed
+  and single-model dependency flags, under-matched baselines, contentious numbers and reviewer
+  counter-readings; the report is persisted as a `RedTeamReport` under `paper/audits/` and recorded in
+  the timeline.
+* **WHY**: the weakest link is usually a claim nobody attacked. The loop must run *before* a release, and
+  it must be impossible for it to "fix" the state it is criticising.
+* **DATA MODEL**: `RedTeamReport`/`RedTeamQuestion`; `respects_state` is asserted, not promised.
+* **INVARIANTS**: auditors report, they never mutate (the report refuses `respects_state=False`).
+* **TESTS**: `test_timeline_redteam_evolution.py`.
+* **LIMITATIONS**: the questions are deterministic templates over registered state; it does not read the
+  paper text (the style auditor and grounding gates do that).
+* **NEXT**: an `--unaddressed` view that tracks which objections a later experiment closed.
+
+## 15. `importer/` timeline reconstruction
+
+* **WHAT**: the import pipeline now emits `TimelineEvent`s for the material it recovers — notes (with
+  their diary dates), experiments, results, claim candidates, rejected claims, decisions and open
+  questions — all flagged `imported=True`.
+* **WHY**: a researcher handing over a project wants the *history* back, not only the current state.
+* **TESTS**: `test_import_dla.py::test_import_is_recorded_in_the_event_log_and_timeline`,
+  `test_timeline_redteam_evolution.py::test_timeline_records_imported_material_as_imported`.
 
 ## 10. `agents/` — Agent OS
 

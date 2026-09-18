@@ -340,7 +340,17 @@ class ImportPipeline:
         notes = self._notes(by_kind, scanned, task_id)
         gaps = self._skill_gaps(by_kind.get(FactKind.SKILL_GAP, []), task_id)
         conflicts = self._conflicts(conflict_scan, experiments, task_id)
-        timeline_count = self._timeline(by_kind.get(FactKind.GIT_COMMIT, []), source_path, task_id)
+        timeline_count = self._timeline(
+            by_kind.get(FactKind.GIT_COMMIT, []),
+            source_path,
+            task_id,
+            claims=claims,
+            rejected=rejected,
+            experiments=experiments,
+            notes=notes,
+            decisions=decisions,
+            questions=questions,
+        )
         self._unparsed_reviews(extraction, scanned)
         # Persist the review queue: import *proposes*, it never blesses. Everything uncertain is a
         # pending item a human must decide on.
@@ -1600,7 +1610,25 @@ class ImportPipeline:
 
     # ------------------------------------------------------------------ state / timeline
 
-    def _timeline(self, commits: list[Fact], source_path: Path, task_id: str) -> int:
+    def _timeline(
+        self,
+        commits: list[Fact],
+        source_path: Path,
+        task_id: str,
+        *,
+        claims: Sequence[Claim] = (),
+        rejected: Sequence[Claim] = (),
+        experiments: Sequence[Experiment] = (),
+        notes: Sequence[AuthorNote] = (),
+        decisions: Sequence[Decision] = (),
+        questions: Sequence[OpenQuestion] = (),
+    ) -> int:
+        """Reconstruct the research history, not just the current state.
+
+        The imported material is a *record of work that already happened*: the timeline must show it as
+        such, marked ``imported=True`` so nobody mistakes a recovered diary entry for something that
+        happened today.
+        """
         count = 0
         for fact in sorted(commits, key=lambda f: str(f.payload.get("date", ""))):
             self.kernel.timeline.record(
@@ -1614,6 +1642,100 @@ class ImportPipeline:
                 imported=True,
             )
             count += 1
+
+        for note in sorted(notes, key=lambda n: n.created_at):
+            kind = {
+                NoteKind.ANOMALY: TimelineEventKind.ANOMALY,
+                NoteKind.FAILED_EXPERIMENT: TimelineEventKind.EXPERIMENT_FAILED,
+                NoteKind.CLAIM_REVISION: TimelineEventKind.CLAIM_REVISION,
+                NoteKind.WHY_THIS_EXPERIMENT: TimelineEventKind.FINDING,
+                NoteKind.DECISION_NOTE: TimelineEventKind.DECISION,
+            }.get(note.kind, TimelineEventKind.FINDING)
+            self.kernel.timeline.record(
+                kind,
+                note.text[:180],
+                detail=f"imported note ({note.kind.value})",
+                actor=note.author,
+                task_id=task_id,
+                refs=[note.note_id],
+                imported=True,
+            )
+            count += 1
+
+        for experiment in experiments:
+            self.kernel.timeline.record(
+                TimelineEventKind.EXPERIMENT_REGISTERED,
+                f"Imported experiment: {experiment.title}",
+                detail=(
+                    f"status {experiment.status.value}, design ceiling "
+                    f"{experiment.evidence_level().value}, seeds {experiment.seeds or 'unknown'}"
+                ),
+                actor=self.principal.name,
+                task_id=task_id,
+                refs=[experiment.experiment_id],
+                imported=True,
+            )
+            count += 1
+            if experiment.status.value == "COMPLETED":
+                self.kernel.timeline.record(
+                    TimelineEventKind.EXPERIMENT_RESULT,
+                    f"Imported results for {experiment.title}",
+                    detail="measured values recovered from the run artifacts",
+                    actor=self.principal.name,
+                    task_id=task_id,
+                    refs=[experiment.experiment_id],
+                    imported=True,
+                )
+                count += 1
+
+        for claim in claims:
+            self.kernel.timeline.record(
+                TimelineEventKind.CLAIM_CREATED,
+                f"Imported claim candidate: {claim.statement[:140]}",
+                detail="entered as HYPOTHESIS; import never certifies a claim",
+                actor=self.principal.name,
+                task_id=task_id,
+                refs=[claim.claim_id],
+                imported=True,
+            )
+            count += 1
+
+        for claim in rejected:
+            self.kernel.timeline.record(
+                TimelineEventKind.CLAIM_REJECTED,
+                f"Imported rejected claim: {claim.statement[:140]}",
+                detail=claim.rejection_reason or "",
+                actor=self.principal.name,
+                task_id=task_id,
+                refs=[claim.claim_id],
+                imported=True,
+            )
+            count += 1
+
+        for decision in decisions:
+            self.kernel.timeline.record(
+                TimelineEventKind.DECISION,
+                decision.summary[:180],
+                detail=decision.rationale,
+                actor="unknown (pre-import)",
+                task_id=task_id,
+                refs=[decision.decision_id],
+                imported=True,
+            )
+            count += 1
+
+        for question in questions:
+            self.kernel.timeline.record(
+                TimelineEventKind.IDEA,
+                f"Imported open question: {question.statement[:140]}",
+                detail=f"classified as {question.kind.value}",
+                actor=self.principal.name,
+                task_id=task_id,
+                refs=[question.question_id],
+                imported=True,
+            )
+            count += 1
+
         self.kernel.timeline.record(
             TimelineEventKind.IMPORT,
             f"Import of {source_path.name} started",

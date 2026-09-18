@@ -38,6 +38,12 @@ from .discovery import (
     FINDING_CODE_CAPABILITIES,
     SkillDiscoveryAgent,
 )
+from .evolution import (
+    EvolutionResult,
+    SkillEvolution,
+    deterministic_runner,
+    quality_from_benchmark,
+)
 from .lifecycle import LEGAL_TRANSITIONS, SkillLifecycle
 from .registry import SkillRegistry
 from .sandbox import (
@@ -53,6 +59,7 @@ __all__ = [
     "CAPABILITY_AREAS",
     "CAPABILITY_QUERY_TEMPLATES",
     "DEFAULT_DENYLIST",
+    "EvolutionResult",
     "FINDING_CODES_BY_SUITE",
     "FINDING_CODE_CAPABILITIES",
     "FINDING_WEIGHTS",
@@ -60,13 +67,16 @@ __all__ = [
     "PROTECTED_OPERATION_CODES",
     "PROTECTED_PATH_PATTERNS",
     "SkillDiscoveryAgent",
+    "SkillEvolution",
     "SkillLifecycle",
     "SkillRegistry",
     "SkillRunner",
     "SkillSandbox",
     "default_catalogue",
+    "deterministic_runner",
     "deterministic_task_id",
     "hard_fail",
+    "quality_from_benchmark",
     "score_outcome",
     "seed_default_tasks",
 ]

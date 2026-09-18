@@ -858,6 +858,104 @@ def mechanism_audit(
     _print_audit(audit)
 
 
+@app.command("timeline")
+def timeline_command(
+    action: str = typer.Argument("show", help="show | summary | claim | why | ask"),
+    ref: Optional[str] = typer.Option(None, "--ref", help="Explain one object (claim/experiment/str id)."),
+    claim_id: Optional[str] = typer.Option(None, "--claim", help="Claim history."),
+    question: Optional[str] = typer.Option(None, "--question", help="One of the standing questions."),
+    limit: int = typer.Option(30, "--limit"),
+    json_out: bool = typer.Option(False, "--json"),
+    root: Optional[Path] = typer.Option(None, "--root"),
+) -> None:
+    """The research timeline: why the claim was cancelled, the route changed, the control was added."""
+    kernel = _kernel(root)
+    view = kernel.history
+
+    if action == "summary":
+        _json(view.summary())
+        return
+
+    if action == "claim":
+        if not claim_id:
+            _fail("--claim is required")
+        _json(view.claim_history(claim_id))
+        return
+
+    if action == "why":
+        if not ref and not question:
+            _fail("--ref or --question is required")
+        records = view.why(ref=ref, text=question)
+        if not records:
+            _warn("no decision, transition or timeline event matches")
+        for record in records:
+            console.print(
+                f"[bold]{record['kind']}[/bold] {record.get('at', '')} {record.get('id', '')}\n"
+                f"  {record.get('summary', '')}\n  rationale: {record.get('rationale', '')}"
+            )
+        return
+
+    if action == "ask":
+        if not question:
+            _fail("--question is required")
+        _json(view.answer(question))
+        return
+
+    if json_out:
+        _json(
+            [
+                {"phase": phase, "events": [event.model_dump(mode="json") for event in events]}
+                for phase, events in view.narrative()
+            ]
+        )
+        return
+
+    for phase, events in view.narrative():
+        table = Table(title=f"{phase.upper()} ({len(events)})")
+        table.add_column("when")
+        table.add_column("kind")
+        table.add_column("who")
+        table.add_column("what", overflow="fold")
+        for event in events[-limit:]:
+            marker = "[dim](imported)[/dim]" if event.imported else ""
+            table.add_row(
+                f"{event.at:%Y-%m-%d %H:%M}", event.kind.value, event.actor,
+                f"{event.title} {marker}",
+            )
+        console.print(table)
+
+
+@app.command("redteam")
+def redteam(
+    claim: Optional[str] = typer.Option(None, "--claim"),
+    subject: str = typer.Option("current research state", "--subject"),
+    json_out: bool = typer.Option(False, "--json"),
+    root: Optional[Path] = typer.Option(None, "--root"),
+) -> None:
+    """Adversarial review before a claim or a release: what would falsify this, and which weakness is first."""
+    from ..agents import RedTeamAgent
+
+    kernel = _kernel(root)
+    agent = RedTeamAgent(kernel)
+    report = _run(agent.review, subject=subject, claim_ids=[claim] if claim else ())
+    if json_out:
+        _json(report.model_dump(mode="json"))
+        return
+    console.print(f"[bold]RED TEAM REPORT[/bold] — {report.verdict} ({len(report.questions)} objection(s))")
+    console.print(f"strongest objection: {report.strongest_objection}")
+    console.print(f"weakest experiment: {report.weakest_experiment_id or 'n/a'}")
+    table = Table("severity", "category", "question")
+    for item in report.questions:
+        table.add_row(item.severity.value, item.category, item.question[:96])
+    console.print(table)
+    if report.blocking():
+        _warn(f"{len(report.blocking())} high-severity objection(s) are unaddressed")
+    console.print(
+        "[dim]the red team reports; it never edits research state (the report is stored under "
+        ".researchos/paper/audits/)[/dim]"
+    )
+
+
 def _print_audit(audit) -> None:
     console.print(f"[bold]{audit.kind.value} audit: {audit.title}[/bold] -> {audit.verdict.value}")
     if audit.summary:
@@ -1005,6 +1103,68 @@ def skill_benchmark(
         "[dim]a skill becomes ACTIVE only after a benchmark run clears the activation score AND "
         "passes the regression gate against the incumbent[/dim]"
     )
+
+
+@skill_app.command("evolve")
+def skill_evolve(
+    parents: Optional[str] = typer.Option(None, "--from", help="Comma-separated parent skill ids for synthesis."),
+    rule: str = typer.Option("", "--rule", help="The research-specific rule to inject."),
+    name: Optional[str] = typer.Option(None, "--name"),
+    description: str = typer.Option("", "--description"),
+    suite: str = typer.Option("LITERATURE", "--suite"),
+    findings: Optional[str] = typer.Option(
+        None, "--findings", help="JSON map task_id -> [finding codes], for a deterministic dry run."
+    ),
+    content: Optional[Path] = typer.Option(None, "--content", help="Candidate source file to inspect."),
+    root: Optional[Path] = typer.Option(None, "--root"),
+) -> None:
+    """Run a candidate skill through sandbox → benchmark → regression → ACTIVE or REJECT.
+
+    With ``--findings`` the benchmark uses a deterministic runner (no model, no network), which is how
+    the *gates* are tested; without it, a caller-supplied runner is required through the API.
+    """
+    from ..skills.benchmark_tasks import seed_default_tasks
+    from ..skills.evolution import SkillEvolution, deterministic_runner
+    from ..skills.registry import SkillRegistry
+
+    kernel = _kernel(root)
+    ensure = _run(seed_default_tasks, kernel)
+    if ensure:
+        console.print(f"[dim]{len(ensure)} benchmark task(s) available[/dim]")
+    if not findings:
+        _fail("--findings is required for a dry run (a real evaluation needs an injected runner)")
+    import json as _jsonlib
+
+    mapping = _jsonlib.loads(findings)
+    runner = deterministic_runner(mapping)
+
+    if not parents:
+        _fail("--from is required: synthesis combines existing skills plus a research rule")
+    parent_ids = [p.strip() for p in parents.split(",") if p.strip()]
+    evolution = SkillEvolution(kernel)
+    card, result = _run(
+        evolution.synthesise_and_evaluate,
+        kernel.principal("skill_synthesizer"),
+        parents=parent_ids,
+        rule=rule or "unspecified rule",
+        name=name or "synthesised-skill",
+        description=description,
+        suite=suite,
+        runner=runner,
+        content=content.read_text(encoding="utf-8") if content else None,
+    )
+    console.print(result.summary())
+    for note in result.notes:
+        console.print(f"  [dim]{note}[/dim]")
+    if result.sandbox and result.sandbox.findings:
+        for finding in result.sandbox.findings:
+            console.print(f"  sandbox: [{finding.severity.value}] {finding.code}: {finding.message[:80]}")
+    if result.benchmark:
+        console.print(
+            f"  benchmark score {result.benchmark.score:.2f} "
+            f"(regression passed: {result.benchmark.regression_passed})"
+        )
+    _json(evolution.history(card.skill_id))
 
 
 @skill_app.command("install")

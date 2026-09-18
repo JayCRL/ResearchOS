@@ -484,6 +484,7 @@ class RedTeamAgent(Agent):
             verdict="READY" if not questions else ("NEEDS_WORK" if claims else "NOT_READY"),
             created_by=self.principal.name,
         )
+        self.kernel.red_team_reports.save(report)
         self.kernel.events.append(
             "red_team.report",
             actor=self.principal.name,
@@ -493,6 +494,14 @@ class RedTeamAgent(Agent):
                 "verdict": report.verdict,
                 "blocking": len(blocking),
             },
+        )
+        self.kernel.timeline.record(
+            TimelineEventKind.AUDIT,
+            f"Red-team review: {report.verdict}",
+            detail=report.meta_review,
+            actor=self.principal.name,
+            refs=[report.red_team_report_id, *report.subject_refs[:5]],
+            state_revision=self.kernel.state.revision(),
         )
         _ = closed
         return report

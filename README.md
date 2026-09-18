@@ -42,9 +42,18 @@ researchos mechanism --claim <claim-id>
 researchos literature search "write placement in fast weights"
 researchos novelty audit "nobody has compared placement under a matched-energy control"
 
+# the project explains its own history, and attacks its own claims
+researchos timeline                       # narrative: observation → hypothesis → experiment → revision → claim
+researchos timeline ask --question "why was this control added?"
+researchos redteam                        # RED TEAM REPORT: what would falsify this, and what is weakest
+
 # the paper is compiled, gated, and refuses ungrounded numbers
 researchos paper compile --out paper.md
 researchos paper readiness
+
+# skills earn their status, and upgrades are regression-gated
+researchos skill benchmark --suite LITERATURE --seed-tasks
+researchos skill evolve --from <skill-a>,<skill-b> --rule "every claim needs a locator" --findings findings.json
 ```
 
 `researchos --help` lists every command.
@@ -60,7 +69,7 @@ researchos paper readiness
 | **Insufficient understanding of existing research** | `researchos import` runs Research Archaeology: scan → classify → extract → conflict detection → research-state reconstruction → **human review queue**. It never imports a claim above `HYPOTHESIS` (`importer/`) |
 | **Narrow literature search** | `QueryFamily` forces exact, synonym, historical, mechanistic, functional, neighbouring-community and recent terminology families; coverage is measured per family and provider, and a novelty verdict is illegal below the thresholds (`literature/`) |
 | **"Written by AI" papers** | Claims are compiled, not generated: approved claims + verified evidence + analysis numbers + literature claims with locators. A deterministic style auditor flags empty background, template language, repeated n-grams, buzzword density, unsupported causal/novelty language and **history mismatch** (`paper/style_audit.py`, `claims/language.py`) |
-| **Skills that never improve** | A Skill Meta-System: discovery → registry → sandbox → benchmark → regression → ACTIVE, with the rule that a generated skill is **not** a trusted skill and an upgrade that breaks a previously passing benchmark is refused (`skills/`) |
+| **Skills that never improve** | A Skill Meta-System: discovery → registry → sandbox → benchmark → regression → ACTIVE, with the rule that a generated skill is **not** a trusted skill and an upgrade that breaks a previously passing benchmark is refused. `researchos skill evolve` runs the whole loop (`skills/evolution.py`) |
 
 **What ResearchOS does not claim:** it does not guarantee that a paper is correct, that a claim is novel,
 that a mechanism is proven, or that an experiment is reproducible. It makes those questions *answerable

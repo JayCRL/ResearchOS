@@ -80,6 +80,13 @@ def build_supported_chain(
     )
     kernel.experiments.save(experiment)
     kernel.events.append("experiment.registered", actor="experiment", payload={"experiment_id": experiment.experiment_id})
+    kernel.timeline.record(
+        "EXPERIMENT_REGISTERED",
+        f"Registered experiment: {experiment.title}",
+        actor="experiment",
+        refs=[experiment.experiment_id],
+        state_revision=kernel.state.revision(),
+    )
 
     mean_direct = sum(DIRECT_VALUES) / len(DIRECT_VALUES)
     mean_shuf = sum(SHUF_VALUES) / len(SHUF_VALUES)
@@ -117,6 +124,13 @@ def build_supported_chain(
     )
     kernel.analyses.save(analysis)
     kernel.events.append("analysis.computed", actor="analysis", payload={"analysis_id": analysis.analysis_id})
+    kernel.timeline.record(
+        "ANALYSIS",
+        f"Analysis: {analysis.title}",
+        actor="analysis",
+        refs=[analysis.analysis_id, experiment.experiment_id],
+        state_revision=kernel.state.revision(),
+    )
 
     registry = EvidenceRegistry(kernel)
     raw = Evidence(
@@ -158,6 +172,13 @@ def build_supported_chain(
         evidence_ids=[analyzed.evidence_id, raw.evidence_id],
         supporting_experiments=[experiment.experiment_id],
         limitations=["three seeds only", "single model family"],
+    )
+    kernel.timeline.record(
+        "EVIDENCE",
+        f"Evidence verified for {experiment.title}",
+        actor="analysis",
+        refs=[analyzed.evidence_id, raw.evidence_id],
+        state_revision=kernel.state.revision(),
     )
     lifecycle.transition(kernel.principal("claim_manager"), claim.claim_id, ClaimStatus.HYPOTHESIS, reason="scope declared")
     lifecycle.transition(kernel.principal("claim_manager"), claim.claim_id, ClaimStatus.TESTED, reason="experiment completed")

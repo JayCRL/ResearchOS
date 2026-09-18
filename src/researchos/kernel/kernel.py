@@ -38,6 +38,7 @@ from ..models import (
     PaperArtifact,
     PriorArtMatrix,
     QueryPlan,
+    RedTeamReport,
     ResearchProject,
     ResearchState,
     ReviewItem,
@@ -58,7 +59,7 @@ from .permissions import Cap, PolicyEngine, Principal, PrincipalKind
 from .store import EntityStore, ProjectStore, YamlIO
 from .state import StateManager
 from .tasks import TaskManager
-from .timeline import TimelineRecorder
+from .timeline import TimelineRecorder, TimelineView
 from .transitions import TransitionManager
 
 
@@ -109,6 +110,7 @@ class ResearchKernel:
         self.timeline_events = store.register("timeline_event", TimelineEvent, "event_id")
         self.notes = store.register("author_note", AuthorNote, "note_id")
         self.paper_artifacts = store.register("paper", PaperArtifact, "paper_id")
+        self.red_team_reports = store.register("red_team_report", RedTeamReport, "red_team_report_id")
         self._store = store
 
         # --- managers
@@ -118,6 +120,7 @@ class ResearchKernel:
         )
         self.ledger = ConflictLedger(self.conflicts, self.events)
         self.timeline = TimelineRecorder(self.timeline_events, self.events)
+        self.history = TimelineView(self)
 
     # ================================================================== constructors
 

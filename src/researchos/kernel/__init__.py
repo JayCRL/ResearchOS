@@ -61,7 +61,7 @@ from .provenance import (
 from .state import StateManager
 from .store import EntityStore, ProjectStore, YamlIO, merge_missing
 from .tasks import TaskManager
-from .timeline import TimelineRecorder
+from .timeline import NARRATIVE_PHASES, TimelineRecorder, TimelineView
 from .transitions import TransitionManager
 
 __all__ = [
@@ -89,6 +89,7 @@ __all__ = [
     "ImportError_",
     "LiteratureError",
     "MARKER",
+    "NARRATIVE_PHASES",
     "PermissionDenied",
     "PolicyEngine",
     "Principal",
@@ -109,6 +110,7 @@ __all__ = [
     "TaskBoundaryViolation",
     "TaskManager",
     "TimelineRecorder",
+    "TimelineView",
     "TransitionError",
     "TransitionManager",
     "VerificationError",
