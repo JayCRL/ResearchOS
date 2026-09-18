@@ -58,6 +58,23 @@ researchos skill evolve --from <skill-a>,<skill-b> --rule "每条 claim 必须�
 
 `researchos --help` 会列出全部命令。**详细使用指南（含实测输出、每种"拒绝"的含义、命令速查表、Python API）：[`docs/usage.zh-CN.md`](docs/usage.zh-CN.md)。**
 
+### 看板（Dashboard）
+
+```bash
+pip install -e ".[api]"
+researchos api                    # → http://127.0.0.1:8765/
+researchos api --enable-actions   # 额外启用"人在回路"按钮（仅本机客户端）
+```
+
+单个 HTML 文件，**零构建、零 npm、零 CDN**——五年后离线也能打开。它按规定显示研究状态：核心问题、
+claim 及其证据允许的措辞、被否决的 claim、证据覆盖、实验及其设计缺口、冲突与 provenance 信任序、
+文献图（含最接近的先行工作与新颖性结论）、开放问题、研究决策、当前任务、技能健康与缺口、研究时间线，
+以及**论文就绪度的 7 个独立维度（故意没有总分）**。
+
+看板只是**视图**：真值源仍是 `.researchos/`。除非加 `--enable-actions`，否则没有任何写操作；即使启用，
+它也是**以 human principal 身份、走与 CLI 完全相同的 kernel 门禁**——证据不足的 claim 照样被拒、过期的
+状态转换照样被拒，而且每次点击都会记录成 `ui.action` 事件，与 shell 命令可区分。
+
 ---
 
 ## 它如何解决"它之所以存在"的六个问题

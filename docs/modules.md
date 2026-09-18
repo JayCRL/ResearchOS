@@ -214,21 +214,29 @@ TESTS · KNOWN LIMITATIONS · NEXT DEPENDENCY**. Line and test counts are from t
 * **TESTS**: `test_import_dla.py::test_import_is_recorded_in_the_event_log_and_timeline`,
   `test_timeline_redteam_evolution.py::test_timeline_records_imported_material_as_imported`.
 
-## 16. `api/` — read-only HTTP surface (§23)
+## 16. `api/` — read-only HTTP surface + dashboard (§21, §23)
 
-* **WHAT**: a FastAPI app (`create_app(kernel)`) exposing health, state, claims (+ obligations),
-  evidence (+ provenance trace), experiments, analyses, conflicts, audits, review queue, literature
-  coverage/novelty/prior-art, timeline (+ summary, per-claim history, `why`), readiness, agents, skills
-  and the capability table. `researchos api` serves it.
-* **WHY**: v1 is CLI *and* API. But every mutation in ResearchOS carries an explicit principal and a
-  capability check, and an HTTP write endpoint is the easiest place for ambient authority to reappear —
-  so the surface is **read-only by design**, and a test asserts that write methods return 404/405.
-* **DATA MODEL**: no new objects; serialised models plus derived views.
-* **INVARIANTS**: preserves the permission model by not offering a bypass.
-* **TESTS**: `test_api_and_voice.py` (22 route/permission assertions).
-* **LIMITATIONS**: read-only (no task triggering over HTTP), no auth layer (bind to localhost or put it
-  behind a proxy), no pagination.
-* **NEXT**: authenticated, principal-carrying write endpoints that reuse the same gate — never a bypass.
+* **WHAT**: a FastAPI app exposing health, state, claims (+ obligations and overclaim rewrites), evidence
+  (+ provenance trace), experiments, analyses, conflicts, audits, review queue, literature
+  coverage/novelty/prior-art, timeline (+ per-claim history and `why`), readiness, agents, skills and the
+  capability table; a `/dashboard` bundle so the UI paints in one request; and a **zero-build dashboard**
+  (one HTML file with inline CSS/JS, no npm, no CDN) covering every panel the spec requires, including
+  seven separate readiness dimensions and no total score.
+* **WHY**: v1 is CLI *and* API. Every mutation in ResearchOS carries an explicit principal and a
+  capability check, and an HTTP write endpoint is the easiest place for ambient authority to reappear — so
+  the read surface has no write routes (a test asserts 404/405), and the *optional* action endpoints
+  (`--enable-actions`) are local-only, off by default, executed as the human principal through the same
+  kernel gate, and recorded as `ui.action` events.
+* **DATA MODEL**: no new objects; serialised models plus derived views; the dashboard payload reports how
+  many records it omitted so a truncated panel never looks complete.
+* **INVARIANTS**: preserves the permission model by not offering a bypass — a stale STR is still refused
+  from the UI, and a claim with missing evidence still cannot be promoted.
+* **TESTS**: `test_dashboard.py` (15: self-containment, required panels, every fetched route exists,
+  payload completeness, truncation awareness, actions disabled by default, remote-client refusal, audited
+  decisions, kernel refusals surfacing as 409).
+* **LIMITATIONS**: no auth layer (bind to localhost or put it behind a proxy); no pagination; the UI is
+  read-mostly by design, so bulk editing stays in the CLI.
+* **NEXT**: authenticated write endpoints for multi-user deployments, and a "diff since revision" view.
 
 ## 17. `paper/voice.py` — researcher voice (§18)
 

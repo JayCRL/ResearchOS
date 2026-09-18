@@ -46,7 +46,7 @@ researchos = "researchos.cli.main:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-researchos = ["templates/**/*.yaml", "templates/**/*.md", "paper/templates/**/*.md"]
+researchos = ["templates/**/*.yaml", "templates/**/*.md", "paper/templates/**/*.md", "api/static/*.html", "api/static/*.css", "api/static/*.js"]
 
 [tool.pytest.ini_options]
 minversion = "8.0"

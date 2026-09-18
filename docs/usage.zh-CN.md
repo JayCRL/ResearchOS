@@ -393,12 +393,31 @@ proposal = agents["claim_manager"].request_approval("<claim_id>", reason="义务
 print(proposal.describe())
 ```
 
-只读 HTTP 接口（给看板 / 笔记本 / 评审人用；**故意没有写路由**）：
+只读 HTTP 接口 + 看板（给看板 / 笔记本 / 评审人用）：
 
 ```powershell
-researchos api --port 8765
-# GET /state /claims /claims/{id} /evidence/trace/{claim_id} /timeline/why /readiness /agents /capabilities
+pip install -e ".[api]"
+researchos api --root D:\my-project                  # → http://127.0.0.1:8765/
+researchos api --root D:\my-project --enable-actions # 额外启用"人在回路"按钮
 ```
+
+看板是**单个 HTML 文件，零构建、零 npm、零 CDN**（离线可用、五年后仍能打开）。它显示规范要求的全部面板：
+核心问题、claim（含其证据允许的措辞）、被否决的 claim、证据覆盖、实验与设计缺口、冲突与信任序、文献图与
+最接近先行工作、新颖性结论、开放问题、研究决策、当前任务、技能健康与缺口、研究时间线，以及**论文就绪度的
+7 个独立维度（无总分）**。
+
+**它是视图，不是第二权威。**写操作默认关闭；`--enable-actions` 开启后也只在**本机客户端**可用，并且以
+human principal 身份走**与 CLI 完全相同的 kernel 门禁**：
+
+| 看板动作 | 仍然会被拒绝的情况 |
+|---|---|
+| 复核队列 accept / reject / defer | 未知 decision 值 → 422 |
+| 批准已提交的状态转换 | 请求不存在 → 409；状态已变化（STALE）→ 409，且记录为 STALE |
+| 拒绝状态转换 | 非 human 能力不足 → 拒绝 |
+| 重新哈希验证证据 | 文件被改动 → `HASH_MISMATCH` 并生成阻断性 Conflict |
+
+每次点击都会写入 `ui.action` 事件（含动作、客户端地址、origin=dashboard），因此日志里能区分"人点的"和
+"命令行执行的"。其余所有变更仍留在 CLI——因为 CLI 里"谁在改"是显式的。
 
 把 `researchos` 接进 CI：
 

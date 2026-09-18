@@ -1289,9 +1289,16 @@ def paper_voice(root: Optional[Path] = typer.Option(None, "--root")) -> None:
 def api_command(
     host: str = typer.Option("127.0.0.1", "--host"),
     port: int = typer.Option(8765, "--port"),
+    enable_actions: bool = typer.Option(
+        False,
+        "--enable-actions",
+        help="Also mount the human-in-the-loop actions (review decisions, transition approval, "
+        "evidence verification). Local clients only; every action runs as the human principal "
+        "through the same kernel gate as the CLI.",
+    ),
     root: Optional[Path] = typer.Option(None, "--root"),
 ) -> None:
-    """Serve the read-only HTTP surface (requires ``pip install researchos[api]``)."""
+    """Serve the dashboard and the read-only JSON API (requires ``pip install researchos[api]``)."""
     try:
         import uvicorn  # type: ignore
     except ImportError:
@@ -1299,9 +1306,24 @@ def api_command(
     from ..api.app import app_for_project
 
     kernel = _kernel(root)
-    console.print(f"[bold]read-only API[/bold] http://{host}:{port} (project {kernel.root})")
-    console.print("[dim]writes are not exposed over HTTP: mutations need an explicit principal[/dim]")
-    uvicorn.run(app_for_project(str(kernel.root)), host=host, port=port, log_level="info")
+    console.print(f"[bold]ResearchOS dashboard[/bold]  http://{host}:{port}/")
+    console.print(f"[dim]project: {kernel.root} · JSON API: /docs · state plane: .researchos/[/dim]")
+    if enable_actions:
+        console.print(
+            "[yellow]human actions enabled[/yellow] (review decisions, transition approval, evidence "
+            "verification) — local clients only, executed as the human principal through the kernel gate"
+        )
+    else:
+        console.print(
+            "[dim]read-only: every mutation stays in the CLI, where the acting principal is explicit. "
+            "Add --enable-actions for the human-in-the-loop actions.[/dim]"
+        )
+    uvicorn.run(
+        app_for_project(str(kernel.root), enable_actions=enable_actions),
+        host=host,
+        port=port,
+        log_level="info",
+    )
 
 
 @agent_app.command("list")

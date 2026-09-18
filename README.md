@@ -61,6 +61,26 @@ researchos skill evolve --from <skill-a>,<skill-b> --rule "every claim needs a l
 `researchos --help` lists every command. A step-by-step usage guide (with real output, what each refusal
 means, a command cheat sheet and the Python API) is in [`docs/usage.zh-CN.md`](docs/usage.zh-CN.md) (Chinese).
 
+### Dashboard
+
+```bash
+pip install -e ".[api]"
+researchos api                 # → http://127.0.0.1:8765/
+researchos api --enable-actions   # + human-in-the-loop buttons (local clients only)
+```
+
+One HTML file, **no build step, no npm, no CDN** — it must still open in five years, offline. It shows
+the research state the way the spec requires: core question, claims with the language their evidence
+permits, rejected claims, evidence coverage, experiments with their design gaps, conflicts with the
+provenance trust order, the literature map with closest prior work and novelty verdicts, open questions,
+research decisions, the active task, skill health and gaps, the timeline, and **seven separate paper
+readiness dimensions with no single total**.
+
+The dashboard is a **view**: `.researchos/` stays the source of truth. Writes are off unless you pass
+`--enable-actions`, and even then they run as the **human principal through the same kernel gate as the
+CLI** — a claim with missing evidence is still refused, a stale transition is still refused, and every
+click is recorded as a `ui.action` event so it is distinguishable from a shell command.
+
 ---
 
 ## What it does about the six problems it exists for
